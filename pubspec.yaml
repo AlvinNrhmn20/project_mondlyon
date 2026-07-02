@@ -1,0 +1,71 @@
+name: syncreal
+description: Next-Gen BeReal — Hobby-based social media with a Futuristic Cyberpunk aesthetic.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Backend
+  supabase_flutter: ^2.3.0
+
+  # UI / Fonts
+  google_fonts: ^6.2.1
+
+  # Icons
+  cupertino_icons: ^1.0.6
+
+  # State management (lightweight, clean arch)
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^13.2.0
+  
+  lucide_icons: ^0.257.0
+  image_picker: ^1.2.2
+  camera: ^0.11.0+1
+  image: ^4.8.0
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
+  http: ^1.6.0
+  audioplayers: ^6.6.0
+  visibility_detector: ^0.4.0+2
+  share_plus: ^12.0.2
+  record: ^6.2.0
+  path_provider: ^2.1.5
+  cached_network_image: ^3.4.1
+  flutter_dotenv: ^6.0.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  table_calendar: ^3.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "lib/assets/images/mondlyon.png"
+
+flutter_native_splash:
+  color: "#0B0F19"
+  image: "lib/assets/images/mondlyon.png"
+  android_12:
+    image: "lib/assets/images/mondlyon.png"
+    icon_background_color: "#0B0F19"
+
+flutter:
+  uses-material-design: true
+
+  # Daftarkan .env sebagai asset agar flutter_dotenv bisa membacanya
+  assets:
+    - .env
+    - lib/assets/images/
