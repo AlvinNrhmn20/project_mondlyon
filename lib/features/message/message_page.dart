@@ -297,6 +297,33 @@ class _MessagePageState extends State<MessagePage> {
       ),
       body: Column(
         children: [
+          // ── Active Now Section Label ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Row(
+              children: [
+                Text(
+                  'ACTIVE NOW',
+                  style: AppTheme.orbitron(
+                    fontSize: 9,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: AppColors.neonGreen,
+                    shape: BoxShape.circle,
+                    boxShadow: AppColors.neonGreenGlowShadow,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // ── Active Now row ──
           SizedBox(
             height: 92,
@@ -318,16 +345,60 @@ class _MessagePageState extends State<MessagePage> {
           // ── Divider ──
           const Divider(color: AppColors.divider, height: 1),
 
+          // ── Recent Chats Label ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Text(
+                  'RECENT CHATS',
+                  style: AppTheme.orbitron(
+                    fontSize: 9,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // ── Chat List ──
           Expanded(
             child: isLoading
                 ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
                 : friendsList.isEmpty
-                    ? Center(child: Text('No friends yet.', style: AppTheme.inter(color: AppColors.textDisabled)))
-                    : ListView.separated(
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'NO CONVERSATIONS YET',
+                              style: AppTheme.orbitron(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Add friends to start chatting',
+                              style: AppTheme.inter(
+                                fontSize: 13,
+                                color: AppColors.textDisabled,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         itemCount: sortedFriends.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(color: AppColors.divider, height: 1),
                         itemBuilder: (context, index) {
                            final friend = sortedFriends[index];
                            final friendId = friend['id'];
@@ -473,94 +544,150 @@ class _ChatTile extends StatelessWidget {
       }
     }
 
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatRoomPage(
-              friendId: friend['id'] ?? '',
-              friendName: friend['full_name'] ?? friend['username'] ?? 'User',
-              friendUsername: friend['username'] ?? '',
-              friendAvatar: friend['avatar_url'] ?? '',
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          final parentState = context.findAncestorStateOfType<_MessagePageState>();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatRoomPage(
+                friendId: friend['id'] ?? '',
+                friendName: friend['full_name'] ?? friend['username'] ?? 'User',
+                friendUsername: friend['username'] ?? '',
+                friendAvatar: friend['avatar_url'] ?? '',
+              ),
             ),
-          ),
-        );
-      },
-      child: ListTile(
-        tileColor: Colors.transparent,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 46,
-          height: 46,
+          ).then((_) {
+            // ✅ FIX: Refresh data saat kembali dari ChatRoom
+            parentState?._fetchMessages();
+            parentState?.fetchFriends();
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
             color: AppColors.surfaceCard,
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: hasUnread ? primary : AppColors.divider,
+              color: hasUnread ? primary.withValues(alpha: 0.4) : AppColors.divider,
               width: hasUnread ? 1.5 : 1,
             ),
-            boxShadow: hasUnread ? [BoxShadow(color: primary.withValues(alpha: 0.60), blurRadius: 15, spreadRadius: 2)] : null,
-          ),
-          child: CircleAvatar(
-            backgroundColor: Colors.transparent,
-            backgroundImage: avatarUrl != null ? CachedNetworkImageProvider(avatarUrl) as ImageProvider : null,
-            child: avatarUrl == null
-                ? const Icon(Icons.person_rounded, color: AppColors.textDisabled, size: 22)
+            boxShadow: hasUnread
+                ? [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.15),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    )
+                  ]
                 : null,
           ),
-        ),
-        title: Text(
-          fullName,
-          style: AppTheme.inter(
-            fontSize: 14,
-            fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
-            color: hasUnread ? AppColors.textPrimary : AppColors.textSecondary,
-          ),
-        ),
-        subtitle: Text(
-          lastMessage ?? 'Tap to chat',
-          style: AppTheme.inter(
-            fontSize: 12,
-            color: hasUnread ? primary : AppColors.textDisabled,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              timeString,
-              style: AppTheme.inter(
-                fontSize: 11,
-                color: hasUnread ? primary : AppColors.textDisabled,
-              ),
-            ),
-            if (hasUnread) ...[
-              const SizedBox(height: 4),
+          child: Row(
+            children: [
+              // Avatar
               Container(
-                width: 20,
-                height: 20,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: primary,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: primary.withValues(alpha: 0.60), blurRadius: 15, spreadRadius: 2)],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$unreadCount',
-                  style: AppTheme.orbitron(
-                    fontSize: 9,
-                    color: AppColors.black,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+                  color: AppColors.surfaceElevated,
+                  border: Border.all(
+                    color: hasUnread ? primary : AppColors.divider,
+                    width: hasUnread ? 1.5 : 1,
                   ),
+                  boxShadow: hasUnread
+                      ? [
+                          BoxShadow(
+                            color: primary.withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          )
+                        ]
+                      : null,
                 ),
+                child: CircleAvatar(
+                  backgroundColor: Colors.transparent,
+                  backgroundImage: avatarUrl != null ? CachedNetworkImageProvider(avatarUrl) as ImageProvider : null,
+                  child: avatarUrl == null
+                      ? const Icon(Icons.person_rounded, color: AppColors.textDisabled, size: 22)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Name & Last Message
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      style: AppTheme.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      lastMessage ?? 'Tap to chat',
+                      style: AppTheme.inter(
+                        fontSize: 12,
+                        color: hasUnread ? primary : AppColors.textDisabled,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Time & Unread Badge
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    timeString,
+                    style: AppTheme.inter(
+                      fontSize: 11,
+                      color: hasUnread ? primary : AppColors.textDisabled,
+                    ),
+                  ),
+                  if (hasUnread) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: primary.withValues(alpha: 0.5),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          )
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$unreadCount',
+                        style: AppTheme.orbitron(
+                          fontSize: 9,
+                          color: AppColors.black,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

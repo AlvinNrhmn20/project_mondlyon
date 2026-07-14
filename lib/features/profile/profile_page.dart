@@ -150,15 +150,8 @@ class _ProfilePageState extends State<ProfilePage>
           .eq('sender_id', targetId)
           .eq('status', 'requested');
 
-      // 5. User stats (sync rate & top hobby — streak dihitung secara dinamis)
-      final Future<dynamic> statsFuture = Supabase.instance.client
-          .from('user_stats')
-          .select('sync_rate, top_hobby')
-          .eq('user_id', targetId)
-          .maybeSingle();
-
-      // ✅ B1 FIX: Ambil SEMUA created_at post untuk kalkulasi streak dinamis
-      // Tidak lagi bergantung pada user_stats.streak_count yang bisa stale.
+      // 5. Fetch all created_at post dates to dynamically calculate streak, sync rate, and top hobby
+      // Tidak lagi bergantung pada user_stats yang bisa stale.
       final Future<dynamic> postDatesFuture = Supabase.instance.client
           .from('posts')
           .select('created_at')
@@ -166,26 +159,22 @@ class _ProfilePageState extends State<ProfilePage>
 
       final results = await Future.wait([
         momentsFuture, friendsFuture, followersFuture, followingFuture,
-        statsFuture, postDatesFuture,
+        postDatesFuture,
       ]);
 
       final momentsCount   = results[0] as int? ?? 0;
       final friendsCount   = results[1] as int? ?? 0;
       final followersCount = results[2] as int? ?? 0;
       final followingCount = results[3] as int? ?? 0;
-      final statsData      = results[4] as Map<String, dynamic>?;
-      final postDatesData  = results[5] as List<dynamic>? ?? [];
+      final postDatesData  = results[4] as List<dynamic>? ?? [];
 
       // ✅ B1 FIX: Hitung streak dari data post aktual (timezone-aware)
       final int newStreak = _calculateStreak(postDatesData);
-      double newSyncRate = 0.0;
-      String newTopHobby = '-';
-
-      if (statsData != null) {
-        final rawSync = statsData['sync_rate'];
-        if (rawSync is num) newSyncRate = rawSync.toDouble();
-        newTopHobby = statsData['top_hobby']?.toString() ?? '-';
-      }
+      
+      // ✅ P4 FIX: Hitung Sync Rate dan Top Hobby secara dinamis
+      final dynamicStats = await _calculateDynamicStats(targetId, postDatesData);
+      final double newSyncRate = dynamicStats['sync_rate'];
+      final String newTopHobby = dynamicStats['top_hobby'];
 
       final newImpactScore = (momentsCount * 5) + (newStreak * 10);
 
@@ -245,6 +234,102 @@ class _ProfilePageState extends State<ProfilePage>
       checkDay = checkDay.subtract(const Duration(days: 1));
     }
     return streak;
+  }
+
+  /// ✅ P4 FIX: Kalkulasi Sync Rate dan Top Hobby secara dinamis untuk bulan ini
+  Future<Map<String, dynamic>> _calculateDynamicStats(String targetId, List<dynamic> postDates) async {
+    double calcSyncRate = 0.0;
+    String calcTopHobby = '-';
+    
+    try {
+      final now = DateTime.now();
+      final currentMonth = now.month;
+      final currentYear = now.year;
+      final daysInMonth = DateTime(currentYear, currentMonth + 1, 0).day;
+      
+      // 1. Sync Rate = (Hari posting bulan ini / Total hari di bulan ini) * 100
+      final Set<int> daysPostedThisMonth = {};
+      for (var p in postDates) {
+        final raw = p['created_at']?.toString();
+        if (raw != null) {
+          try {
+            final dt = DateTime.parse(raw).toLocal();
+            if (dt.year == currentYear && dt.month == currentMonth) {
+              daysPostedThisMonth.add(dt.day);
+            }
+          } catch (_) {}
+        }
+      }
+      calcSyncRate = (daysPostedThisMonth.length / daysInMonth) * 100;
+
+      // 2. Top Hobby = Hobi terbanyak dari user yang postnya di-interaksi (react/comment) bulan ini
+      final startOfMonth = DateTime(currentYear, currentMonth, 1).toUtc().toIso8601String();
+      
+      final res = await Future.wait([
+        Supabase.instance.client.from('post_reactions').select('post_id').eq('user_id', targetId).gte('created_at', startOfMonth),
+        Supabase.instance.client.from('post_comments').select('post_id').eq('user_id', targetId).gte('created_at', startOfMonth),
+      ]);
+      
+      final reactions = res[0] as List<dynamic>;
+      final comments = res[1] as List<dynamic>;
+      
+      final Set<int> postIds = {};
+      for (var r in reactions) { if (r['post_id'] != null) postIds.add(int.parse(r['post_id'].toString())); }
+      for (var c in comments) { if (c['post_id'] != null) postIds.add(int.parse(c['post_id'].toString())); }
+      
+      if (postIds.isNotEmpty) {
+        // Ambil user_id dari post-post tersebut
+        final posts = await Supabase.instance.client.from('posts').select('user_id').inFilter('id', postIds.toList());
+        final Set<String> friendIds = {};
+        for (var p in posts) {
+          final uid = p['user_id']?.toString();
+          if (uid != null && uid != targetId) friendIds.add(uid); // Jangan hitung hobi sendiri
+        }
+        
+        if (friendIds.isNotEmpty) {
+          // Ambil hobi mereka dan join dengan tabel hobbies
+          final userHobbies = await Supabase.instance.client
+              .from('user_hobbies')
+              .select('hobbies(name)')
+              .inFilter('user_id', friendIds.toList());
+          
+          final Map<String, int> hobbyCounts = {};
+          int totalHobbies = 0;
+          
+          for (var uh in userHobbies) {
+            final hobbiesData = uh['hobbies'];
+            if (hobbiesData != null) {
+              final hobbyName = hobbiesData['name']?.toString();
+              if (hobbyName != null) {
+                hobbyCounts[hobbyName] = (hobbyCounts[hobbyName] ?? 0) + 1;
+                totalHobbies++;
+              }
+            }
+          }
+          
+          if (hobbyCounts.isNotEmpty && totalHobbies > 0) {
+            var topHobbyName = '';
+            var maxCount = 0;
+            hobbyCounts.forEach((name, count) {
+              if (count > maxCount) {
+                maxCount = count;
+                topHobbyName = name;
+              }
+            });
+            
+            final percentage = (maxCount / totalHobbies) * 100;
+            calcTopHobby = '$topHobbyName ${percentage.toStringAsFixed(0)}%';
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error calculating dynamic stats: $e');
+    }
+    
+    return {
+      'sync_rate': calcSyncRate,
+      'top_hobby': calcTopHobby,
+    };
   }
 
   Future<void> _fetchProfileData() async {

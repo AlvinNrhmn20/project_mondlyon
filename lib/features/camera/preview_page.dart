@@ -402,7 +402,11 @@ class _PreviewPageState extends State<PreviewPage> {
                 }
                 setSheetState(() => isSearching = true);
                 try {
-                  final url = Uri.parse('https://itunes.apple.com/search?term=$query&entity=song&limit=10');
+                  final url = Uri.https('itunes.apple.com', '/search', {
+                    'term': query,
+                    'entity': 'song',
+                    'limit': '10',
+                  });
                   final response = await http.get(url);
                   if (response.statusCode == 200) {
                     final data = jsonDecode(response.body);
@@ -487,11 +491,11 @@ class _PreviewPageState extends State<PreviewPage> {
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         children: [
-                          {'label': '🔥 Hits', 'value': 'Hits'},
-                          {'label': '☕ Chill', 'value': 'Chill'},
-                          {'label': '🎸 Pop', 'value': 'Pop'},
-                          {'label': '🕺 Viral', 'value': 'Viral'},
-                          {'label': '🎧 R&B', 'value': 'R&B'},
+                          {'label': '🔥 Hits', 'value': 'top hits popular 2025'},
+                          {'label': '☕ Chill', 'value': 'chill lofi relaxing beats'},
+                          {'label': '🎸 Pop', 'value': 'pop music trending'},
+                          {'label': '🕺 Viral', 'value': 'viral tiktok trending hits'},
+                          {'label': '🎧 R&B', 'value': 'rnb soul music'},
                         ].map((mood) {
                           final isSelected = selectedMood == mood['value'];
                           return Padding(
@@ -551,7 +555,29 @@ class _PreviewPageState extends State<PreviewPage> {
                                       leading: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: coverUrl != null
-                                            ? Image.network(coverUrl, width: 48, height: 48, fit: BoxFit.cover)
+                                            ? CachedNetworkImage(
+                                                imageUrl: coverUrl,
+                                                width: 48,
+                                                height: 48,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, __) => Container(
+                                                  width: 48, height: 48,
+                                                  color: Colors.white12,
+                                                  child: const Center(
+                                                    child: SizedBox(
+                                                      width: 16, height: 16,
+                                                      child: CircularProgressIndicator(
+                                                        color: Colors.white54, strokeWidth: 1.5,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                errorWidget: (_, __, ___) => Container(
+                                                  width: 48, height: 48,
+                                                  color: Colors.white12,
+                                                  child: const Icon(Icons.music_note, color: Colors.white54),
+                                                ),
+                                              )
                                             : Container(
                                                 width: 48,
                                                 height: 48,
@@ -625,13 +651,17 @@ class _PreviewPageState extends State<PreviewPage> {
           },
         );
       },
-    ).then((_) {
+    ).then((_) async {
       sheetSetState = null;      // ✅ FIX P2: Invalidate setter — cegah setState setelah sheet tutup
       playerStateSub?.cancel();  // ✅ FIX P2: Cancel listener SEBELUM player di-dispose
       if (debounce?.isActive ?? false) debounce!.cancel();
-      audioPlayer.stop();
+      await audioPlayer.stop();  // ✅ FIX: Await stop sebelum dispose
       audioPlayer.dispose();
-      searchController.dispose();
+      // ✅ FIX: Defer disposal ke frame berikutnya agar TextField
+      // sudah sepenuhnya unmounted — mencegah _dependents.isEmpty crash
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        searchController.dispose();
+      });
     });
   }
 

@@ -40,14 +40,21 @@ class _CameraPageState extends ConsumerState<CameraPage> with WidgetsBindingObse
   /// Pause kamera saat app di-background, resume saat kembali ke foreground.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return;
+    final CameraController? cameraController = _cameraController;
+
+    // Jika kamera belum ada, abaikan kecuali saat resume
+    if (cameraController == null || !cameraController.value.isInitialized) {
+      if (state != AppLifecycleState.resumed) {
+        return;
+      }
     }
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      // Matikan kamera untuk hemat baterai/memory saat app tidak di layar
       _cameraController?.dispose();
       _cameraController = null;
     } else if (state == AppLifecycleState.resumed) {
+      // Hidupkan ulang otomatis saat masuk kembali ke aplikasi
       _initCamera();
     }
   }
